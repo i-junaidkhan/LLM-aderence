@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # The Python application service
+  app:
+    build: .
+    # The name for your Docker image, as you requested.
+    # I've made it more specific to this project.
+    image: i-junaidkhan/llm-aderence:latest
+    container_name: llm-aderence-app
+    # Mount the local app directory into the container.
+    # This allows you to edit code on your server and re-run without rebuilding.
+    volumes:
+      - ./app:/app
+    # Make the app service wait for the ollama service to be healthy
+    depends_on:
+      ollama:
+        condition: service_started
+    # Ensures the app container doesn't start until Ollama is ready (simple check)
+    command: >
+      sh -c "
+        echo 'Waiting for Ollama to be ready...' &&
+        while ! nc -z ollama 11434; do
+          sleep 1;
+        done;
+        echo 'Ollama is ready, starting experiment...' &&
+        python run_experiments.py
+      "
+
+  # The Ollama service
+  ollama:
+    image: ollama/ollama
+    container_name: ollama-service
+    ports:
+      - "11434:11434"
+    volumes:
+      # Mount a Docker volume to persist downloaded models
+      - ollama_data:/root/.ollama
+    # --- GPU Passthrough Configuration ---
+    # This section is critical for performance. It exposes the host's NVIDIA GPU.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  ollama_data: # Defines the persistent volume for Ollama models
